@@ -2,10 +2,38 @@ import sys
 
 from pyrate.fileutils import INIConfig
 
+from ConfigParser import SafeConfigParser
+
 from commontests.test_configuration_template import BaseTestConfiguration
 from commontests.configuration.configuration_scenarios import *
 
 this_mod = sys.modules[__name__]
+
+def get_host_info_data():
+
+    host_info_dict = {'MEMBER_1_Member' : None,
+                      'MEMBER_2_Member' : None,
+                      'MEMBER_1_TTF_UserId' : None,
+                      'MEMBER_1_TTO_1_UserId' : None}
+
+    global host_info_dict
+    if not host_info_dict:
+        from pyrate import Manager
+        filename = "{0}\{1}hostinfo.cfg".format(Manager.getOrderServer().mappedConfigDir,
+                                                Manager.getGateway().name)
+        parser = SafeConfigParser()
+        parser.read([filename])
+
+        for section in parser.sections():
+            if section.startswith('MEMBER_1'):
+                host_info_dict['MEMBER_1_Member'] = "{0}".format(parser.get(section, 'Member'))
+            if section.startswith('MEMBER_2'):
+                host_info_dict['MEMBER_2_Member'] = "{0}".format(parser.get(section, 'Member'))
+            if section.startswith('MEMBER_1_TTF'):
+                host_info_dict['MEMBER_1_TTF_UserId'] = "{0}".format(parser.get(section, 'UserId'))
+            if section.startswith('MEMBER_1_TTO_1'):
+                host_info_dict['MEMBER_1_TTO_1_UserId'] = "{0}".format(parser.get(section, 'UserId'))
+    return host_info_dict
 
 INI_CONFIG_NAMES = ['host_info_order_active_omnibus', 'host_info_order_active_unsupported_config',
                     'host_info_order_active_invalid_order_delete_timer', 'host_info_order_active_invalid_log_level',
@@ -32,12 +60,12 @@ host_info_order_active_invalid_max_connection_attempts.set_data('MEMBER_1', 'Max
 
 host_info_price_down_TTP_IP_missing.set_data('TTP', 'AccessIP', '')
 
-host_info_order_down_duplicate_Member.set_data('MEMBER_2', 'Member', 'GWSQE1')
-host_info_order_down_duplicate_TTF_ID.set_data('MEMBER_2_TTF', 'UserId', 'T_TT835A17')
-host_info_order_down_duplicate_TTO_ID.set_data('MEMBER_2_TTO_1', 'UserId', 'T_TT835A56')
-host_info_order_down_reused_TTF_ID.set_data('MEMBER_1_TTO_1', 'UserId', 'T_TT835A17')
-host_info_order_down_reused_TTO_ID.set_data('MEMBER_1_TTO_2', 'UserId', 'T_TT835A56')
-host_info_order_down_duplicate_Membership.set_data('MEMBER_1', 'Member', 'GWSQE3')
+host_info_order_down_duplicate_Member.set_data('MEMBER_2', 'Member', get_host_info_data()['MEMBER_1_Member'])
+host_info_order_down_duplicate_TTF_ID.set_data('MEMBER_2_TTF', 'UserId', get_host_info_data()['MEMBER_1_TTF_UserId'])
+host_info_order_down_duplicate_TTO_ID.set_data('MEMBER_2_TTO_1', 'UserId', get_host_info_data()['MEMBER_1_TTO_1_UserId'])
+host_info_order_down_reused_TTF_ID.set_data('MEMBER_1_TTF', 'UserId', get_host_info_data()['MEMBER_1_TTO_1_UserId'])
+host_info_order_down_reused_TTO_ID.set_data('MEMBER_1_TTO_1', 'UserId', get_host_info_data()['MEMBER_1_TTF_UserId'])
+host_info_order_down_duplicate_Membership.set_data('MEMBER_2', 'Member', get_host_info_data()['MEMBER_1_Member'])
 
 hostinfo_order_server_active_order_rejected_Member1_TTF_IP_missing.set_data('MEMBER_1_TTF', 'AccessIP', '')
 

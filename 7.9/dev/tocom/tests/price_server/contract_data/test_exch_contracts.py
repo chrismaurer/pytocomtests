@@ -10,6 +10,7 @@ class TestContracts(BaseTestContracts):
 
         super(TestContracts, self).__init__()
 
-        self.prod_types=[aenums.TT_PROD_FUTURE,
-                         aenums.TT_PROD_FSPREAD,
-                         aenums.TT_PROD_OPTION]
+        self.prod_types = [aenums.TT_PROD_FUTURE,
+                           aenums.TT_PROD_FSPREAD,
+                           aenums.TT_PROD_OPTION,
+                           aenums.TT_PROD_OSTRATEGY]

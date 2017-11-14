@@ -19,6 +19,8 @@ class TestOrderThrottle(BaseTestOrderThrottle):
         register_crews(Worker.PROXY_DIRECT, rel)
         self.inquire_order_status = aenums.TT_ORDER_STATUS_REJECTED
 
+        self.diff_num_orders = [-1, 0]
+
 class TestThrottleOrderBook(BaseTestThrottleOrderBook):
     def __init__(self):
         super(TestThrottleOrderBook, self).__init__(mf_config, futures_filter, order_rate=3)

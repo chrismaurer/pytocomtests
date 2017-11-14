@@ -4,7 +4,7 @@ from commontests.test_fill_server_template import BaseTestNonRolloverFillServer
 from commontests.utils import register_crews
 
 from tocom.tests.utils import (mf_config, mf_option_config, mf_multi_leg_config,
-                             futures_filter, fspread_filter, option_filter)
+                             futures_filter, fspread_filter, option_filter, ostrategy_filter)
 
 __all__ = ['TestFillServerNonRolloverFutures',
            'TestFillServerNonRolloverSpreads',
@@ -31,3 +31,10 @@ class TestFillServerNonRolloverOptions(BaseTestNonRolloverFillServer):
         super(TestFillServerNonRolloverOptions, self).__init__(mf_option_config, option_filter)
 
         self.prod_types = option_filter
+
+class TestFillServerNonRolloverStrategies(BaseTestNonRolloverFillServer):
+    def __init__(self):
+        register_crews(Worker.DIRECT)
+        super(TestFillServerNonRolloverStrategies, self).__init__(mf_multi_leg_config, ostrategy_filter)
+
+        self.prod_types = ostrategy_filter

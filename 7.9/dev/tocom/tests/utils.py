@@ -1,5 +1,5 @@
 # Python Imports
-from operator import eq
+from operator import eq, gt
 #import os
 import re
 import datetime
@@ -63,14 +63,17 @@ bounds_20_50 = PositiveIntegerBounds(20,50)
 
 mf_config = MarketFinderConfigData()
 mf_config.timeout = 500
-mf_config.depth = 10
-mf_config.maxTriesPerProduct = 7
+mf_config.depth = 20
+mf_config.maxTriesPerProduct = 12
 mf_config.useCache = True
 mf_config.fixLotQty = False
 mf_config.failPatterns = [re.compile('.*Illegal transaction at this time.*'),
-                         re.compile('.*The transaction is not valid for this instrument type.*'),
-                         re.compile('.*Given time validity is not allowed.*'),
-                         re.compile('.*The series first trading time is in the future.*')]
+                          re.compile('.*The transaction is not valid for this instrument type.*'),
+                          re.compile('.*Given time validity is not allowed.*'),
+                          re.compile('.*The series first trading time is in the future.*'),
+                          re.compile('.*The series \(or its underlying\) is stopped.*'),
+                          re.compile('.*Pre-trade server could not find series.*'),
+                          re.compile('.*series is not traded in CLICK XT.*')]
 mf_config.acceptable_reject_messages = ['No qty filled or placed in order book; EX: omniapi_tx_ex() returned 0 with txstat 1',
                                         'EX: transaction aborted (Order-book volume was too low to fill order.)',
                                         'GTDate orders cannot be FOK or IOC.']
@@ -78,20 +81,25 @@ mf_config.acceptable_reject_messages = ['No qty filled or placed in order book; 
 mf_option_config = deepcopy(mf_config)
 mf_option_config.maxTriesPerProduct = 120
 mf_option_config.useDefaultBestPriceFirst = True
-mf_option_config.defaultBestPrice = 100
+mf_option_config.defaultBestPrice = 3.00
+mf_option_config.requireEmptyMarket = False
+#opt_contract_filter = ContractComparison([('seriesName', eq, "CAL_NK225_170714_20")])
 
 mf_multi_leg_config = deepcopy(mf_config)
 mf_multi_leg_config.maxTriesPerProduct = 80
 mf_multi_leg_config.useDefaultBestPriceFirst = True
-mf_multi_leg_config.defaultBestPrice = 500
+mf_multi_leg_config.defaultBestPrice = 1.00
 mf_multi_leg_config.ignoreLegs = True
 
-ProductGroup.FUTURE.register(['CGAS', 'CKER', 'SILV', 'TGAB', 'TGCN', 'TGRS', 'TGSB'])
-ProductGroup.FSPREAD.register(['CGAS', 'CKER', 'SILV', 'TGAB', 'TGCN', 'TGRS', 'TGSB'])
+#ProductGroup.FUTURE.register(['NKVI', ])
+#ProductGroup.OPTION.register(['NK225', ])
+#ProductGroup.OPTION.register(['TOPIX', 'JGBL', 'NK225', 'NK225W', 'JN400'])
+ProductGroup.OSTRATEGY.register(['GOLD', ])
 
-futures_filter = [ProductType.FUTURE, ContractFilter.TRADABLE, ProductGroup.FUTURE]
-fspread_filter = [ProductType.FSPREAD, ContractFilter.TRADABLE, ProductGroup.FSPREAD]
-option_filter = [ProductType.OPTION, ContractFilter.TRADABLE]
+futures_filter = [ProductType.FUTURE, ContractFilter.TRADABLE]#, ProductGroup.FUTURE]
+fspread_filter = [ProductType.FSPREAD, ContractFilter.TRADABLE]
+option_filter = [ProductType.OPTION, ContractFilter.TRADABLE]#, ProductGroup.OPTION]
+ostrategy_filter = [ProductType.OSTRATEGY, ContractFilter.TRADABLE, ProductGroup.OSTRATEGY]
 outrights = [ProductType.OUTRIGHT, ContractFilter.TRADABLE]
 intra_prod_mleg = [ProductType.INTRA_PROD_MULTI_LEG, ContractFilter.TRADABLE]
 inter_prod_mleg = [ProductType.INTER_PROD_MULTI_LEG, ContractFilter.TRADABLE]
@@ -124,12 +132,115 @@ tomorrow = datetime.datetime.now() + timedelta(1)
 Tif.ROLLOVER.register(datetime.datetime(year=tomorrow.year, month=tomorrow.month, day=tomorrow.day,
                                         hour=11, minute=35, second=00))
 
+## Strategy Creation ##
+call_filter = ContractComparison([('callput', eq, aenums.TT_CALL)])
+put_filter = ContractComparison([('callput', eq, aenums.TT_PUT)])
+option_call_preds = [ProductType.OPTION, ContractFilter.TRADABLE, call_filter]
+option_put_preds = [ProductType.OPTION, ContractFilter.TRADABLE, put_filter]
+Strategy.NSC_TWO_LEGS.register({'legs':[StrategyLeg(base_preds=option_call_preds,
+                                                    leg_preds=None,
+                                                    qty_ratio=1,
+                                                    buy_sell=aenums.TT_BUY),
+                                        StrategyLeg(base_preds=option_put_preds,
+                                                    leg_preds=[('contr_exp', eq, 1),
+                                                               ('strike', eq, 1)],
+                                                    qty_ratio=1,
+                                                    buy_sell=aenums.TT_SELL)],
+                                'exch_strategy_code':aenums.TT_TAILOR_MADE_COMB_ID,
+                                'tt_prod_type':aenums.TT_PROD_OSTRATEGY,
+                                'tt_strategy_code':aenums.TT_TAILOR_MADE_COMB_ID})
+Strategy.NSC_THREE_LEGS.register({'legs':[StrategyLeg(base_preds=option_call_preds,
+                                                      leg_preds=None,
+                                                      qty_ratio=1,
+                                                      buy_sell=aenums.TT_BUY),
+                                          StrategyLeg(base_preds=option_put_preds,
+                                                      leg_preds=[('contr_exp', eq, 1),
+                                                                 ('strike', eq, 1)],
+                                                      qty_ratio=1,
+                                                      buy_sell=aenums.TT_BUY),
+                                          StrategyLeg(base_preds=option_call_preds,
+                                                      leg_preds=[('contr_exp', eq, 1),
+                                                                 ('strike', gt, 1)],
+                                                      qty_ratio=1,
+                                                      buy_sell=aenums.TT_SELL)],
+                                  'exch_strategy_code':aenums.TT_TAILOR_MADE_COMB_ID,
+                                  'tt_prod_type':aenums.TT_PROD_OSTRATEGY,
+                                  'tt_strategy_code':aenums.TT_TAILOR_MADE_COMB_ID})
+Strategy.NSC_FOUR_LEGS.register({'legs':[StrategyLeg(base_preds=option_put_preds,
+                                                     leg_preds=None,
+                                                     qty_ratio=1,
+                                                     buy_sell=aenums.TT_BUY),
+                                         StrategyLeg(base_preds=option_put_preds,
+                                                     leg_preds=[('contr_exp', eq, 1),
+                                                                ('strike', gt, 1)],
+                                                     qty_ratio=1,
+                                                     buy_sell=aenums.TT_SELL),
+                                         StrategyLeg(base_preds=option_put_preds,
+                                                     leg_preds=[('contr_exp', eq, 1),
+                                                                ('strike', gt, 2)],
+                                                     qty_ratio=1,
+                                                     buy_sell=aenums.TT_BUY),
+                                         StrategyLeg(base_preds=option_put_preds,
+                                                     leg_preds=[('contr_exp', eq, 1),
+                                                                ('strike', gt, 3)],
+                                                     qty_ratio=1,
+                                                     buy_sell=aenums.TT_SELL)],
+                                 'exch_strategy_code':aenums.TT_TAILOR_MADE_COMB_ID,
+                                 'tt_prod_type':aenums.TT_PROD_OSTRATEGY,
+                                 'tt_strategy_code':aenums.TT_TAILOR_MADE_COMB_ID})
+Strategy.COVERED.register({'legs':[StrategyLeg(base_preds=option_put_preds,
+                                               leg_preds=None,
+                                               buy_sell=aenums.TT_BUY,
+                                               qty_ratio=1),
+                                   StrategyLeg(base_preds=futures_filter,
+                                               leg_preds=None,
+                                               buy_sell=aenums.TT_SELL,
+                                               qty_ratio=1)],
+                           'exch_strategy_code':aenums.TT_TAILOR_MADE_COMB_ID,
+                           'tt_prod_type':aenums.TT_PROD_OSTRATEGY,
+                           'tt_strategy_code':aenums.TT_TAILOR_MADE_COMB_ID})
+Strategy.COVERED_TWO_FUT_LEGS.register({'legs':[StrategyLeg(base_preds=option_call_preds,
+                                                            leg_preds=None,
+                                                            buy_sell=aenums.TT_BUY,
+                                                            qty_ratio=1),
+                                                StrategyLeg(base_preds=option_put_preds,
+                                                            leg_preds=[('contr_exp', eq, 1),
+                                                                       ('strike', eq, 1)],
+                                                            buy_sell=aenums.TT_SELL,
+                                                            qty_ratio=1),
+                                                StrategyLeg(base_preds=futures_filter,
+                                                            leg_preds=None,
+                                                            buy_sell=aenums.TT_SELL,
+                                                            qty_ratio=1),
+                                                StrategyLeg(base_preds=futures_filter,
+                                                            leg_preds=[('contr_exp', gt, 1), ],
+                                                            qty_ratio=1,
+                                                            buy_sell=aenums.TT_BUY)],
+                                        'exch_strategy_code':aenums.TT_TAILOR_MADE_COMB_ID,
+                                        'tt_prod_type':aenums.TT_PROD_OSTRATEGY,
+                                        'tt_strategy_code':aenums.TT_TAILOR_MADE_COMB_ID})
+Strategy.INVALID.register({'legs':[StrategyLeg(base_preds=option_call_preds,
+                                               leg_preds=None,
+                                               qty_ratio=2,
+                                               buy_sell=aenums.TT_BUY),
+                                   StrategyLeg(base_preds=option_put_preds,
+                                               leg_preds=[('contr_exp', eq, 1),
+                                                          ('strike', eq, 1)],
+                                               qty_ratio=2,
+                                               buy_sell=aenums.TT_BUY)],
+                           'exch_strategy_code':aenums.TT_TAILOR_MADE_COMB_ID,
+                           'tt_prod_type':aenums.TT_PROD_OSTRATEGY,
+                           'tt_strategy_code':aenums.TT_TAILOR_MADE_COMB_ID})
+Messages.SERIES_CREATE_SUCCESS.register('Spread/Strategy created successfully')
+Messages.SERIES_CREATE_REJECT.register('DC3, EX: transaction aborted \(Illegal ratio between the legs\.\)')
+Messages.SERIES_CREATE_INVERT_REJECT.register('You made a poopy strategy!')
+
 ###################################
 ## ORDER BOOK SHARING SCENARIOS  ##
 ###################################
 change_hold_reject_mods = [
                       bind(SetOrderAttrs, {'exchange_clearing_account':ExchangeClearingAccount.INVALID}),
-                      bind(SetOrderAttrs, {'tif':Tif.GIS}),
+                      bind(SetOrderAttrs, {'tif':Tif.GTD}),
                       bind( SetOrderAttrs, {'acct_type':aenums.TT_ACCT_NONE} ),
                       bind(SetOrderAttrs,{'order_qty':-9999})
                       ]
@@ -150,7 +261,7 @@ replace_ob_share_mods = [bind(TickRel, 2),
                 bind(SetOrderAttrs, {'exchange_clearing_account':ExchangeClearingAccount.NUMERIC})
                 ]
 
-ob_share_replace_arej_mods = [bind(SetOrderAttrs, {'tif':Tif.GIS})]
+ob_share_replace_arej_mods = [bind(SetOrderAttrs, {'tif':Tif.GTD})]
 
 replace_reject_mods= [bind(SetOrderAttrs,{'site_order_key':'111111'}),]
 
@@ -159,3 +270,6 @@ submit_reject_mods = [bind(SetOrderAttrs, {'tif':Tif.GTDATE_FAR_PAST})]
 replace_reject_mods= [bind(SetOrderAttrs,{'site_order_key':'111111'}),]
 
 submit_reject_mods = [bind(SetOrderAttrs, {'tif':Tif.GTDATE_FAR_PAST})]
+
+change_reject_actions = [bind(SetOrderAttrs, {'limit_prc':999999999})]
+

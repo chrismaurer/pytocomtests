@@ -2,22 +2,121 @@
 import logging
 
 # Pyrate Imports
+#from ttapi.client import pythonify
+from captain import implements, scope, Action
+from captain.lib import (Override, OverrideSets, PriceQuantityChange,
+                         SetExpectedNonTradeDataFromFills, SetOrderAction, SendOrder,
+                         WaitForLastPricesOnTradeDataUpdateNoDuplicateCallbackCheck,
+                         WaitForOrderStatus, WaitForFill, DeleteOrder, ReplaceOrder,
+                         WaitForDirectTradeDataIgnoreOtherCallbacks)
+from ttutil import hash_value
 from ttapi import aenums, cppclient
-from ttapi.client import pythonify
-from captain import implements, scope, interface, Action, Context, OrderContext, create_context
-from captain.lib import Override, PriceQuantityChange, SetExpectedNonTradeDataFromFills,\
-                        WaitForLastPricesOnTradeDataUpdateNoDuplicateCallbackCheck,\
-                        WaitForOrderStatus
-from pyrate.manager import Manager
 
 # CommonTests Imports
-from commontests import Small_Price_Qty_Chg_Predicate
+from commontests import *
 
 log = logging.getLogger(__name__)
 
-SPQCOverride = [Override(PriceQuantityChange, Small_Price_Qty_Chg_Predicate())]
+spqc = Override(PriceQuantityChange, Small_Price_Qty_Chg_Predicate())
+SPQC_SET = OverrideSets([[Override()], [spqc]])
 
-tocom_overrides = []
+tocom_price_overrides = []
+tocom_tradestate_overrides = []
+
+#Predicate for TOCOM DeleteOrder
+class TOCOM_HoldOrder_Predicate(object):
+    def __call__(self, action_type, arg_spec, test):
+        for key in arg_spec.keys():
+            order_status = arg_spec[key]
+            if order_status == aenums.TT_ORDER_STATUS_HOLD:
+                return True
+            else:
+                return False
+
+    def __hash__(self):
+        return hash(hash_value(self.__class__.__name__).hexdigest())
+
+    def __eq__(self, other):
+        if type(other) != type(self):
+            return False
+        return True
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __str__(self):
+        return self.__class__.__name__
+
+    __repr__ = __str__
+
+    @property
+    def signature(self):
+        return str(self)
+#//----------------------------------------#
+# --- Action override for fills
+
+@implements(WaitForFill)
+class TOCOMWaitForFill(WaitForFill):
+
+    def __init__(self, qty=None, fill_type=None, rel_qty=None, op='add', price=None, timeout=120):
+        super(TOCOMWaitForFill, self).__init__(qty, fill_type, rel_qty, op, price, timeout)
+        self.leg_feeds = ('order', 'fill')
+
+#This override will not be needed once TOCOM moves to 7.15
+@implements(DeleteOrder)
+@scope
+def TOCOMDeleteOrder(order_status=aenums.TT_ORDER_STATUS_OK):
+    """
+    Send a delete order.
+
+    Implemented as a sequence of SetOrderAction('delete'), SendOrderAndWait()
+
+    """
+
+    order_action = aenums.TT_ORDER_ACTION_DELETE
+    order_status=aenums.TT_ORDER_STATUS_OK
+    SetOrderAction('delete')
+    SendOrderAndWait(order_action, order_status)
+
+#This override will not be needed once TOCOM moves to 7.15
+@implements(ReplaceOrder)
+@scope
+def TOCOMReplaceOrder(del_order_status=aenums.TT_ORDER_STATUS_OK,
+                    add_order_status=aenums.TT_ORDER_STATUS_OK,
+                    rep_rej_order_action=aenums.TT_ORDER_ACTION_REPLACE):
+
+    """
+    Send a replace order.
+
+    Implemented as a sequence of SetOrderAction('replace'), SendOrderAndWait()
+
+    """
+    #del_order_status=aenums.TT_ORDER_STATUS_OK
+    #add_order_status=aenums.TT_ORDER_STATUS_OK
+    SetOrderAction('replace')
+    SendOrder()
+    if del_order_status == aenums.TT_ORDER_STATUS_REJECTED:
+        WaitForOrderStatus(order_action=rep_rej_order_action,
+                           order_status=del_order_status,
+                           order_action_orig=aenums.TT_ORDER_ACTION_REPLACE)
+    else:
+        from captain.lib.control_flow import Branch
+        with Branch():
+            del_order_status=aenums.TT_ORDER_STATUS_OK
+            #add_order_status=aenums.TT_ORDER_STATUS_OK
+            WaitForOrderStatus(order_action=aenums.TT_ORDER_ACTION_DELETE,
+                             order_status=del_order_status,
+                             order_action_orig=aenums.TT_ORDER_ACTION_REPLACE)
+        add_order_status=aenums.TT_ORDER_STATUS_HOLD
+        WaitForOrderStatus(order_action=aenums.TT_ORDER_ACTION_ADD,
+                         order_status=add_order_status,
+                         order_action_orig=aenums.TT_ORDER_ACTION_REPLACE)
+
+
+tocom_wait_for_fill_overrides = Override(TOCOMWaitForFill)
+tocom_delete_overrides = Override(TOCOMDeleteOrder, TOCOM_HoldOrder_Predicate())
+tocom_replace_overrides = Override(TOCOMReplaceOrder, TOCOM_HoldOrder_Predicate())
+TOCOM_OVERRIDES = [tocom_wait_for_fill_overrides, tocom_delete_overrides, tocom_replace_overrides]
 
 @implements(SetExpectedNonTradeDataFromFills)
 class OMAPISetExpectedNonTradeDataFromFills(SetExpectedNonTradeDataFromFills):
@@ -105,7 +204,10 @@ class OMAPISetExpectedNonTradeDataFromFills(SetExpectedNonTradeDataFromFills):
                 # get Trade state
                 ts = get_last_price_value(aenums.TT_TRADE_STATE, ctx)
                 # set Trade state
-                new_ts = (aenums.TT_PRICE_STATE_ASK if self.resting_side == aenums.TT_BUY else
+                if ts == 0:
+                    new_ts = 0
+                else:
+                    new_ts = (aenums.TT_PRICE_STATE_ASK if self.resting_side == aenums.TT_BUY else
                                aenums.TT_PRICE_STATE_BID)
                 if new_ts != ts:
                     update_ctx_prices(ctx, aenums.TT_TRADE_STATE, new_ts)
@@ -116,8 +218,6 @@ class OMAPISetExpectedNonTradeDataFromFills(SetExpectedNonTradeDataFromFills):
                 # for override, set high_price on ctx.price_changes as well
                 if (high_prc == cppclient.TT_INVALID_PRICE) or (high_prc < new_ltp):
                     ctx.price_changes[aenums.TT_HIGH_PRC].append(new_ltp)
-                else:
-                    ctx.price_changes[aenums.TT_HIGH_PRC].append(high_prc)
 
                 # get low price
                 low_prc = get_last_price_value(aenums.TT_LOW_PRC, ctx)
@@ -125,16 +225,10 @@ class OMAPISetExpectedNonTradeDataFromFills(SetExpectedNonTradeDataFromFills):
                 # for override, set low_price on ctx.price_changes as well
                 if (low_prc == cppclient.TT_INVALID_PRICE) or (low_prc > new_ltp):
                     ctx.price_changes[aenums.TT_LOW_PRC].append(new_ltp)
-                else:
-                    ctx.price_changes[aenums.TT_LOW_PRC].append(low_prc)
 
                 # set open if it does not exist
                 if aenums.TT_OPEN_PRC not in ctx.price_dict:
                     update_ctx_prices(ctx, aenums.TT_OPEN_PRC, new_ltp)
-
-                # for override, set open on ctx.price_changes if it does not exist
-                if aenums.TT_OPEN_PRC not in ctx.price_changes:
-                    ctx.price_changes[aenums.TT_OPEN_PRC].append(ctx.price_dict[aenums.TT_OPEN_PRC])
 
                 # set exch time stamp
                 # note: because the exact value of the exch time stamp
@@ -159,5 +253,8 @@ class OMAPISetExpectedNonTradeDataFromFills(SetExpectedNonTradeDataFromFills):
 
         return ctx
 
-tocom_overrides.append(Override(OMAPISetExpectedNonTradeDataFromFills))
-tocom_overrides.append(Override(WaitForLastPricesOnTradeDataUpdateNoDuplicateCallbackCheck))
+#tocom_price_overrides.append(Override(OMAPISetExpectedNonTradeDataFromFills))
+tocom_price_overrides.append(Override(WaitForLastPricesOnTradeDataUpdateNoDuplicateCallbackCheck))
+tocom_price_overrides.append(Override(WaitForDirectTradeDataIgnoreOtherCallbacks))
+tocom_tradestate_overrides.extend(tocom_price_overrides)
+tocom_tradestate_overrides.append(Override(OMAPISetExpectedNonTradeDataFromFills))

@@ -1,7 +1,5 @@
-# python imports
 import copy
 
-# captain imports
 from captain.lib.controlled_types import (Worker, OrderType, OrderRes, OrderMod,
                                           Tif, Side, ProductType)
 from commontests.features import (OrderServerFlags, OrderServerFeatureSpec, SUPPORTED,
@@ -10,7 +8,7 @@ from commontests.features import (OrderServerFlags, OrderServerFeatureSpec, SUPP
 # commontests imports
 from commontests.utils import OrderInfo
 
-from tocom.tests.overrides import tocom_overrides
+from tocom.tests.overrides import TOCOM_OVERRIDES
 
 gateway = OrderServerFeatureSpec()
 
@@ -20,11 +18,11 @@ gateway = OrderServerFeatureSpec()
 gateway[OrderType.LIMIT] = SUPPORTED
 gateway[OrderType.MARKET] = SUPPORTED
 gateway[OrderType.MTL] = SUPPORTED
-gateway[OrderType.BEST_LIMIT] = SUPPORTED
 
 gateway[OrderType.BATCH] = UNSUPPORTED
 gateway[OrderType.CROSS] = UNSUPPORTED
 gateway[OrderType.OCO] = UNSUPPORTED
+gateway[OrderType.BEST_LIMIT] = UNSUPPORTED
 
 ##############################################################################
 # OrderRes Support
@@ -49,9 +47,9 @@ gateway[OrderRes.VOLA] = UNSUPPORTED
 # OrderMod Support
 ##############################################################################
 gateway[OrderMod.NONE] = SUPPORTED
-gateway[OrderMod.STOP] = SUPPORTED
-gateway[OrderMod.IF_TOUCHED] = SUPPORTED
 
+gateway[OrderMod.STOP] = UNSUPPORTED
+gateway[OrderMod.IF_TOUCHED] = UNSUPPORTED
 gateway[OrderMod.BEST_ONLY] = UNSUPPORTED
 gateway[OrderMod.AUTO_AGRESS] = UNSUPPORTED
 gateway[OrderMod.LMTL] = UNSUPPORTED
@@ -74,18 +72,41 @@ gateway[Tif.GIS] = UNSUPPORTED
 gateway[ProductType.FSPREAD] = SUPPORTED
 gateway[ProductType.FUTURE] = SUPPORTED
 gateway[ProductType.OPTION] = SUPPORTED
+gateway[ProductType.OSTRATEGY] = SUPPORTED
 
-gateway[ProductType.OSTRATEGY] = UNSUPPORTED
 gateway[ProductType.ENERGY] = UNSUPPORTED
 gateway[ProductType.STOCK] = UNSUPPORTED
+gateway[ProductType.INDEX] = UNSUPPORTED
 
-gateway.unsupported.insert_combo(OrderType.MARKET, Tif.GTC)
-gateway.unsupported.insert_combo(OrderRes.IOC, Tif.GTC)
-gateway.unsupported.insert_combo(OrderRes.FOK, Tif.GTC)
-gateway.unsupported.insert_combo(OrderRes.IOC, Tif.GTDATE)
-gateway.unsupported.insert_combo(OrderRes.FOK, Tif.GTDATE)
-gateway.unsupported.insert_combo(OrderMod.STOP, ProductType.FSPREAD)
-gateway.unsupported.insert_combo(OrderMod.IF_TOUCHED, ProductType.FSPREAD)
+gateway.unsupported_accepts_hold.insert_combo(ProductType.FSPREAD, Tif.GTC)
+gateway.unsupported_accepts_hold.insert_combo(ProductType.OSTRATEGY, Tif.GTC)
+gateway.unsupported_accepts_hold.insert_combo(ProductType.FSPREAD, Tif.GTDATE)
+gateway.unsupported_accepts_hold.insert_combo(ProductType.OSTRATEGY, Tif.GTDATE)
+gateway.unsupported_accepts_hold.insert_combo(OrderMod.AUTO_AGRESS, Tif.GTD)
+gateway.unsupported_accepts_hold.insert_combo(OrderMod.BEST_ONLY, Tif.GTD)
+#gateway.unsupported_accepts_hold.insert_combo(OrderMod.IF_TOUCHED, ProductType.FSPREAD)
+#gateway.unsupported_accepts_hold.insert_combo(OrderMod.STOP, OrderRes.FOK)
+#gateway.unsupported_accepts_hold.insert_combo(OrderMod.STOP, ProductType.OPTION)
+#gateway.unsupported_accepts_hold.insert_combo(OrderMod.STOP, ProductType.OSTRATEGY)
+
+gateway.unsupported_accepts_hold.insert_combo(OrderType.BATCH, Tif.GTD)
+gateway.unsupported_accepts_hold.insert_combo(OrderType.BEST_LIMIT, Tif.GTD)
+gateway.unsupported_accepts_hold.insert_combo(OrderType.CROSS, Tif.GTD)
+gateway.unsupported_accepts_hold.insert_combo(OrderType.MARKET, Tif.GTC)
+gateway.unsupported_accepts_hold.insert_combo(OrderType.MARKET, Tif.GTDATE)
+gateway.unsupported_accepts_hold.insert_combo(OrderRes.IOC, Tif.GTC)
+gateway.unsupported_accepts_hold.insert_combo(OrderRes.FOK, Tif.GTC)
+gateway.unsupported_accepts_hold.insert_combo(OrderRes.IOC, Tif.GTDATE)
+gateway.unsupported_accepts_hold.insert_combo(OrderRes.FOK, Tif.GTDATE)
+gateway.unsupported_accepts_hold.insert_combo(OrderRes.BLOCK, Tif.GTD)
+gateway.unsupported.insert_combo(OrderRes.LOO, OrderMod.IF_TOUCHED)
+gateway.unsupported.insert_combo(OrderRes.LOC, OrderMod.IF_TOUCHED)
+gateway.unsupported.insert_combo(OrderRes.MOO, OrderMod.IF_TOUCHED)
+gateway.unsupported.insert_combo(OrderRes.MOC, OrderMod.IF_TOUCHED)
+gateway.unsupported.insert_combo(OrderRes.LOO, OrderMod.STOP)
+gateway.unsupported.insert_combo(OrderRes.LOC, OrderMod.STOP)
+gateway.unsupported.insert_combo(OrderRes.MOO, OrderMod.STOP)
+gateway.unsupported.insert_combo(OrderRes.MOC, OrderMod.STOP)
 
 gateway_flags = OrderServerFlags()
 gateway_flags.across_prices = OrderServerFlags.SUPPORTED
@@ -94,7 +115,7 @@ gateway_flags.alter_stop_price = OrderServerFlags.SUPPORTED
 gateway_flags.chg_udel = OrderServerFlags.UNSUPPORTED
 gateway_flags.dchg = OrderServerFlags.SUPPORTED
 gateway_flags.drej = OrderServerFlags.SUPPORTED
-gateway_flags.detailed_depth = OrderServerFlags.UNSUPPORTED
+gateway_flags.detailed_depth = OrderServerFlags.SUPPORTED
 gateway_flags.exchange_cancelled = OrderServerFlags.EXPECT_REJECT
 gateway_flags.lone_cancel = OrderServerFlags.UNSUPPORTED
 gateway_flags.inquire = OrderServerFlags.EXPECT_REJECT
@@ -113,8 +134,20 @@ gateway_flags.only_admin_gets_incomplete_order = True
 
 def get_order_info_flags(order_info):
     retval = copy.copy(gateway_flags)
-#    if order_info.res in (OrderRes.IOC, OrderRes.FOK):
-#        retval.chg_udel = OrderServerFlags.EXPECT_REJECT
+#    if order_info.otype is OrderType.MARKET and order_info.res is OrderRes.NONE:
+#        retval.exchange_cancelled = OrderServerFlags.EXPECT_REJECT
+#        if order_info.prod_type is [ProductType.OPTION, ProductType.OSTRATEGY]:
+#            retval.across_prices = OrderServerFlags.UNSUPPORTED
+#    if order_info.tif == Tif.GTD:
+#        retval.os_restart = OrderServerFlags.UNCHANGED
+    if order_info.res is OrderRes.IOC:
+        retval.onhold_rep_sub_ifill = OrderServerFlags.EXPECT_REJECT
+        retval.onhold_chg_sub_rej_del = OrderServerFlags.EXPECT_REJECT
+        retval.add_rej = OrderServerFlags.EXPECT_REJECT
+    if order_info.res is OrderRes.FOK:
+        retval.onhold_rep_sub_ifill = OrderServerFlags.EXPECT_REJECT
+        retval.onhold_chg_sub_rej_del = OrderServerFlags.EXPECT_REJECT
+        retval.add_rej = OrderServerFlags.EXPECT_REJECT
     return retval
 
 def get_reject_order_info(field):
@@ -129,17 +162,23 @@ def get_market_finder_config(order_info):
 
     mf_config = MarketFinderConfigData()
     mf_config.timeout = 500
-    mf_config.depth = 20
-    mf_config.maxTriesPerProduct = 7
+    mf_config.depth = 18
+    mf_config.maxTriesPerProduct = 12
     mf_config.useCache = True
-    mf_config.fixLotQty = False
+    mf_config.fixLotQty = True
     mf_config.failPatterns = (re.compile('.*Illegal transaction at this time.*'),
-                             re.compile('.*time validity is not allowed.*'),
-                             re.compile('.*The transaction is not valid for this instrument type.*'),
-                             re.compile('.*The series first trading time is in the future.*'))
+                              re.compile('.*The transaction is not valid for this instrument type.*'),
+                              re.compile('.*Given time validity is not allowed.*'),
+                              re.compile('.*The series first trading time is in the future.*'),
+                              re.compile('.*The series \(or its underlying\) is stopped.*'),
+                              re.compile('.*Pre-trade server could not find series.*'),
+                              re.compile('.*series is not traded in CLICK XT.*'))
     mf_config.acceptable_reject_messages = ['No qty filled or placed in order book; EX: omniapi_tx_ex() returned 0 with txstat 1',
                                             'EX: transaction aborted (Order-book volume was too low to fill order.)',
-                                            'GTDate orders cannot be FOK or IOC.']
+                                            'GTDate orders cannot be FOK or IOC.',
+                                            'Order type BL not supported.',
+                                            'EX: invalid transaction type (Successful completion)',
+                                            'EX: transaction aborted (Given time validity is not allowed.)']
 
     if order_info.prod_type == ProductType.OPTION:
         mf_config.maxTriesPerProduct = 120
@@ -147,24 +186,25 @@ def get_market_finder_config(order_info):
         mf_config.defaultBestPrice = 5.00
         return mf_config
     if order_info.prod_type == ProductType.FSPREAD or \
+    order_info.prod_type == ProductType.OSTRATEGY or \
     order_info.prod_type == ProductType.MULTI_LEG:
         mf_config.maxTriesPerProduct = 80
         mf_config.useDefaultBestPriceFirst = True
         mf_config.defaultBestPrice = 1.00
         mf_config.ignoreLegs = True
         return mf_config
-    if order_info.mod == OrderMod.STOP:
-        mf_config.name = 'STOP orders'
-        mf_config.depth = 0
-        mf_config.stopTicks = 1
-        mf_config.limitTicks = 6
-        return mf_config
-    if order_info.mod == OrderMod.IF_TOUCHED:
-        mf_config.name = 'IF TOUCHED orders'
-        mf_config.depth = 0
-        mf_config.stopTicks = 1
-        mf_config.limitTicks = 6
-        return mf_config
+#    if order_info.mod == OrderMod.STOP:
+#        mf_config.name = 'STOP orders'
+#        mf_config.depth = 0
+#        mf_config.stopTicks = 1
+#        mf_config.limitTicks = 6
+#        return mf_config
+#    if order_info.mod == OrderMod.IF_TOUCHED:
+#        mf_config.name = 'IF TOUCHED orders'
+#        mf_config.depth = 0
+#        mf_config.stopTicks = 1
+#        mf_config.limitTicks = 6
+#        return mf_config
     else:
         return mf_config
 
@@ -197,9 +237,6 @@ def get_valid_ob_scope_combos(combo, order_info):
 #            return False
 
     return True
-
-def get_product_group_for_order_info(order_info):
-    return order_info
 
 def get_operator_id(entity, exch_mgt):
     from pyrate import Manager
@@ -386,13 +423,10 @@ def overrides(suite_type_mro, order_info, suffix):
                              ChangeAsCancelReplace)
     from commontests.utils import Small_Price_Qty_Chg_Predicate, AcctChg_Predicate
     spqc = Override(PriceQuantityChange, Small_Price_Qty_Chg_Predicate())
-    acct_chg = Override(ChangeAsCancelReplace, AcctChg_Predicate())
 
     suite_type_mro_names = [c.__name__ for c in suite_type_mro]
     if 'OrderManagementSuite' in suite_type_mro_names:
-        return OverrideSets([tocom_overrides, [acct_chg, spqc]])
-    elif 'ServiceShutdownSuite' in suite_type_mro_names:
-        return OverrideSet([acct_chg])
+        return OverrideSets([TOCOM_OVERRIDES, [spqc]])
     else:
         return OverrideSet([Override()])
 
@@ -400,7 +434,6 @@ gateway.get_order_info_flags = get_order_info_flags
 gateway.get_reject_order_info = get_reject_order_info
 gateway.get_market_finder_config = get_market_finder_config
 gateway.get_market_finder_order_info = get_market_finder_order_info
-gateway.get_product_group_for_order_info = get_product_group_for_order_info
 gateway.get_valid_ob_scope_combos = get_valid_ob_scope_combos
 gateway.get_operator_id = get_operator_id
 gateway.get_auditlog_values = get_auditlog_values

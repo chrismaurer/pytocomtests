@@ -4,7 +4,7 @@ from commontests.test_order_book_sharing_template import BaseOrderBookSharing, B
 from commontests.utils import register_crews, WorkerRelationships
 
 from tocom.tests.utils import (mf_config, mf_option_config, mf_multi_leg_config,
-                             futures_filter, fspread_filter, option_filter,
+                             futures_filter, fspread_filter, option_filter, ostrategy_filter,
                              change_ob_share_mods, hold_reject_mods, replace_ob_share_mods,
                              ob_share_replace_arej_mods, replace_reject_mods, submit_reject_mods)
 

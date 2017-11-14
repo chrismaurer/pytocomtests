@@ -1,5 +1,5 @@
 # python imports
-import sys
+import sys 
 
 # commontests imports
 from commontests.order_server.order_management.suites import (OrderManagementSmokeSuiteGenerator,

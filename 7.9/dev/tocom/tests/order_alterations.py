@@ -2,7 +2,7 @@
 from collections import defaultdict
 
 # pycppclient imports
-from ttapi import cppclient, aenums
+from ttapi import cppclient
 
 # captain imports
 from captain import bind
@@ -23,12 +23,10 @@ ECA.VALID_NON_PRIMARY.register('xyx')
 ECA.NUMERIC.register('1234134')
 ECA.INVALID.register('BADTXT')
 
-resting_chg = [bind(SetOrderAttrs, {'chg_qty':2}),
-               bind(SetOrderAttrs, {'chg_qty':-1}),
-               bind(TickRel, 2),
-               [(bind(SetOrderAttrs, {'chg_qty':-1})), (bind(TickRel, -2))],
-               bind(SetOrderAttrs, {'tif':Tif.GTD}),
-               bind(SetOrderAttrs, {'acct_type': aenums.TT_ACCT_GIVEUP_1})]
+resting_chg = [#bind(TickRel, 2),
+               #bind(TickRel, -1),
+               bind(SetOrderAttrs, {'chg_qty':1}),
+               bind(SetOrderAttrs, {'chg_qty':-1})]
 
 resting_rep = [bind(TickRel, 2),
                bind(TickRel, -1),
@@ -79,7 +77,7 @@ held_rep = [bind(TickRel, 2),
             bind(SetOrderAttrs, {'exchange_clearing_account':ECA.VALID_PRIMARY}),
             bind(SetCustomer, Customer.PROXY_DIRECT_SHARE)]
 
-held_rep_rej = [bind(SetOrderAttrs, {'limit_prc':cppclient.TT_INVALID_PRICE})]
+held_rep_rej = [bind(SetOrderAttrs, {'limit_prc':999999999})]
 
 rep_for_itrig = []
 

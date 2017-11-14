@@ -4,13 +4,13 @@ from captain.lib.controlled_types import Worker
 from commontests.price_server.templates.test_exch_smoke_test_template import (BaseTestAggregateDepthSmoke,
                                                                               BaseInsideMarketDepthSmoke,
                                                                               BaseTestNTDTimeAndSalesSmoke,
-                                                                             BaseTestVapSmoke)
+                                                                              BaseTestVapSmoke)
 from commontests.utils import register_crews
 
 from tocom.tests.utils import (mf_config, futures_filter, bounds_1_20, bounds_6_10, bounds_1_10)
 
 # Overrides
-from tocom.tests.overrides import tocom_overrides
+from tocom.tests.overrides import tocom_price_overrides, tocom_tradestate_overrides
 
 __all__ = ['TestAggMarketSmoke', 'TestInsideMarketSmoke',
            'TestNTDTimeAndSalesFuturesSmoke', 'TestVAPSmoke']
@@ -28,8 +28,8 @@ class TestAggMarketSmoke(BaseTestAggregateDepthSmoke):
 
         self.market_config_and_filters = [(mf_config, [futures_filter])]
 
-        self.visible_levels = 10
-        self.overrides=tocom_overrides
+        self.visible_levels = 20
+        self.overrides=tocom_price_overrides
 
 class TestInsideMarketSmoke(BaseInsideMarketDepthSmoke):
 
@@ -45,7 +45,7 @@ class TestInsideMarketSmoke(BaseInsideMarketDepthSmoke):
         self.market_config_and_filters = [(mf_config, [futures_filter])]
 
         self.if_proxy = False
-        self.overrides=tocom_overrides
+        self.overrides=tocom_price_overrides
 
 class TestNTDTimeAndSalesFuturesSmoke(BaseTestNTDTimeAndSalesSmoke):
 
@@ -58,7 +58,7 @@ class TestNTDTimeAndSalesFuturesSmoke(BaseTestNTDTimeAndSalesSmoke):
 
         self.accumulate_ltq = False
         self.restart_timeout = 300
-        self.overrides = tocom_overrides
+        self.overrides = ose_tradestate_overrides
 
 class TestVAPSmoke(BaseTestVapSmoke):
 
@@ -70,4 +70,4 @@ class TestVAPSmoke(BaseTestVapSmoke):
         self.market_config_and_filters = [(mf_config, [futures_filter])]
 
         self.accumulate_ltq = False
-        self.overrides = tocom_overrides
+        self.overrides = ose_price_overrides
